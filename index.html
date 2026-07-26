@@ -64,7 +64,7 @@
     .btn-reset {
       background-color: #FF6B6B;
       color: white;
-      padding: 4px 10px;
+      padding: 6px 12px;
       font-size: 12px;
       border-radius: 6px;
       cursor: pointer;
@@ -151,6 +151,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      text-align: center;
     }
 
     .ranking-list {
@@ -258,7 +259,7 @@
       <div id="tab-rank" class="tab-content" style="display:none;">
         <div class="section-header">
           <h3>🏆 명예의 전당</h3>
-          <button class="btn-reset" onclick="resetRankingData()">초기화</button>
+          <button class="btn-reset" onclick="resetAllData()">전체 데이터 초기화</button>
         </div>
         <div class="hall-of-fame" id="hall-of-fame"></div>
         <h3 style="margin:20px 0 10px 0;">📊 학급 전체 랭킹</h3>
@@ -269,7 +270,7 @@
       <div id="tab-feed" class="tab-content" style="display:none;">
         <div class="section-header">
           <h3>📸 오늘의 인증 피드</h3>
-          <button class="btn-reset" onclick="resetFeedData()">초기화</button>
+          <button class="btn-reset" onclick="resetAllData()">전체 데이터 초기화</button>
         </div>
         <div class="feed-list" id="feed-list"></div>
       </div>
@@ -277,7 +278,6 @@
   </div>
 
   <script>
-    // 💡 보내주신 파이어베이스 정보를 그대로 적용했습니다!
     const firebaseConfig = {
       apiKey: "AIzaSyBoKFdMohkDXLa22OXnKOtWbOCYSNZv2S8",
       authDomain: "study-85099.firebaseapp.com",
@@ -288,11 +288,10 @@
       appId: "1:626605688574:web:18cec57f8fc64bba6fc7af"
     };
 
-    // 파이어베이스 초기화
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 학번 드롭다운
+    // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
     for (let i = 1; i <= 31; i++) {
       const opt = document.createElement('option');
@@ -304,16 +303,21 @@
     let currentUser = { id: null, name: '', points: 0, hours: 0 };
     let uploadedImageBase64 = null;
 
-    // 실시간 DB 연동
+    // 실시간 DB 동기화
     function startRealtimeSync() {
       db.ref('students').on('value', (snapshot) => {
         const data = snapshot.val() || {};
         renderRanking(data);
-        if (data[currentUser.id]) {
+        
+        // 현재 내 유저 데이터 업데이트
+        if (currentUser.id && data[currentUser.id]) {
           currentUser.points = data[currentUser.id].points || 0;
           currentUser.hours = data[currentUser.id].hours || 0;
-          updateUserInfoUI();
+        } else {
+          currentUser.points = 0;
+          currentUser.hours = 0;
         }
+        updateUserInfoUI();
       });
 
       db.ref('feeds').on('value', (snapshot) => {
@@ -338,8 +342,10 @@
         if (data) {
           currentUser.points = data.points || 0;
           currentUser.hours = data.hours || 0;
+          // 이름 업데이트
+          db.ref(`students/${id}`).update({ name: name });
         } else {
-          db.ref(`students/${id}`).set({ id, name, points: 0, hours: 0 });
+          db.ref(`students/${id}`).set({ id: id, name: name, points: 0, hours: 0 });
         }
         updateUserInfoUI();
         startRealtimeSync();
@@ -347,7 +353,7 @@
         document.getElementById('login-screen').classList.remove('active');
         document.getElementById('main-screen').classList.add('active');
       }).catch(err => {
-        alert("파이어베이스 설정 오류! Realtime Database 규칙이 '.read': true, '.write': true 로 변경되어 있는지 확인해 주세요.");
+        alert("파이어베이스 설정 오류! Realtime Database 규칙을 확인해주세요.");
       });
     });
 
@@ -392,6 +398,7 @@
       }
     }
 
+    // 공부 인증 등록
     function submitAuth() {
       const hours = parseFloat(document.getElementById('study-hours').value);
       const memo = document.getElementById('study-memo').value.trim();
@@ -399,12 +406,19 @@
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
       if (!uploadedImageBase64) { alert('사진을 올려주세요!'); return; }
 
-      const newPoints = currentUser.points + Math.floor(hours * 10);
-      const newHours = (parseFloat(currentUser.hours) + hours).toFixed(1);
+      // 숫자 연산 오류 방지 (parseFloat)
+      const currentPoints = parseInt(currentUser.points) || 0;
+      const currentHours = parseFloat(currentUser.hours) || 0;
 
-      db.ref(`students/${currentUser.id}`).update({
+      const newPoints = currentPoints + Math.floor(hours * 10);
+      const newHours = (currentHours + hours).toFixed(1);
+
+      // 데이터 저장
+      db.ref(`students/${currentUser.id}`).set({
+        id: currentUser.id,
+        name: currentUser.name,
         points: newPoints,
-        hours: newHours
+        hours: parseFloat(newHours)
       });
 
       db.ref('feeds').push({
@@ -416,36 +430,59 @@
         time: new Date().toLocaleTimeString()
       });
 
-      alert('인증이 등록되어 학급 전체에 실시간으로 공유되었습니다!');
+      alert('인증이 등록되었습니다!');
       document.getElementById('study-hours').value = '';
       document.getElementById('study-memo').value = '';
+      document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
+      document.getElementById('image-input').value = '';
       uploadedImageBase64 = null;
     }
 
-    function resetRankingData() {
-      if (confirm('모든 학생의 랭킹 및 포인트 데이터를 초기화하시겠습니까?')) db.ref('students').remove();
+    // 🔥 전체 데이터 (포인트,시간,사진) 완벽 초기화
+    function resetAllData() {
+      if (confirm('모든 학생의 포인트, 시간, 사진 기록을 전부 삭제하고 0으로 초기화하시겠습니까?')) {
+        db.ref('students').remove();
+        db.ref('feeds').remove().then(() => {
+          alert('모든 데이터가 완벽하게 초기화되었습니다.');
+        });
+      }
     }
 
-    function resetFeedData() {
-      if (confirm('등록된 모든 피드 사진을 삭제하시겠습니까?')) db.ref('feeds').remove();
-    }
-
+    // 랭킹 렌더링
     function renderRanking(data) {
       const list = [];
+      
+      // 1~31번 기본 틀 생성
       for (let i = 1; i <= 31; i++) {
-        list.push(data[i] || { id: i, name: `학생${i}`, points: 0, hours: 0 });
+        if (data[i]) {
+          list.push({
+            id: i,
+            name: data[i].name || `학생${i}`,
+            points: parseInt(data[i].points) || 0,
+            hours: parseFloat(data[i].hours) || 0
+          });
+        } else {
+          list.push({ id: i, name: `학생${i}`, points: 0, hours: 0 });
+        }
       }
-      list.sort((a, b) => b.points - a.points);
 
-      const top1 = list[0] || {};
-      const top2 = list[1] || {};
-      const top3 = list[2] || {};
+      // 포인트 기준 정렬 (동점이면 학번 순)
+      list.sort((a, b) => {
+        if (b.points === a.points) {
+          return a.id - b.id;
+        }
+        return b.points - a.points;
+      });
+
+      const top1 = list[0];
+      const top2 = list[1];
+      const top3 = list[2];
 
       document.getElementById('hall-of-fame').innerHTML = `
-        <div class="rank-podium">🥈 2등<br><small>${top2.id || '-'}번 ${top2.name || ''}</small><br>${top2.points || 0}pt</div>
-        <div class="rank-podium">👑 1등<br><small>${top1.id || '-'}번 ${top1.name || ''}</small><br>${top1.points || 0}pt</div>
-        <div class="rank-podium">🥉 3등<br><small>${top3.id || '-'}번 ${top3.name || ''}</small><br>${top3.points || 0}pt</div>
+        <div class="rank-podium">🥈 2등<br><small>${top2.id}번 ${top2.name}</small><br><strong>${top2.points}pt</strong></div>
+        <div class="rank-podium">👑 1등<br><small>${top1.id}번 ${top1.name}</small><br><strong>${top1.points}pt</strong></div>
+        <div class="rank-podium">🥉 3등<br><small>${top3.id}번 ${top3.name}</small><br><strong>${top3.points}pt</strong></div>
       `;
 
       const listContainer = document.getElementById('full-ranking-list');
@@ -454,17 +491,18 @@
         listContainer.innerHTML += `
           <div class="ranking-item">
             <div><strong>${idx + 1}위</strong> - ${st.id}번 ${st.name}</div>
-            <div>${st.hours || 0}시간 (${st.points || 0}pt)</div>
+            <div>${st.hours}시간 (${st.points}pt)</div>
           </div>
         `;
       });
     }
 
+    // 피드 렌더링
     function renderFeed(feeds) {
       const feedContainer = document.getElementById('feed-list');
       feedContainer.innerHTML = '';
-      if (feeds.length === 0) {
-        feedContainer.innerHTML = '<p style="text-align:center; color:#888;">등록된 인증 사진이 없습니다.</p>';
+      if (!feeds || feeds.length === 0) {
+        feedContainer.innerHTML = '<p style="text-align:center; color:#888; padding:20px 0;">등록된 인증 사진이 없습니다.</p>';
         return;
       }
       feeds.forEach(item => {
