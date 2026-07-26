@@ -1,4 +1,4 @@
-<!DOCTYPEA html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -61,7 +61,6 @@
     }
     button:hover { background-color: #357ABD; }
 
-    /* 초기화 전용 작은 버튼 */
     .btn-reset {
       background-color: #FF6B6B;
       color: white;
@@ -261,7 +260,7 @@
         <button style="margin-top:15px; width:100%;" onclick="submitAuth()">공부 인증 등록하기</button>
       </div>
 
-      <!-- 탭 2: 포인트 랭킹 (명예의 전당 영역 우상단에 초기화 버튼 추가) -->
+      <!-- 탭 2: 포인트 랭킹 -->
       <div id="tab-rank" class="tab-content" style="display:none;">
         <div class="section-header">
           <h3>🏆 명예의 전당</h3>
@@ -273,7 +272,7 @@
         <div class="ranking-list" id="full-ranking-list"></div>
       </div>
 
-      <!-- 탭 3: 인증 피드 (피드 영역 우상단에 초기화 버튼 추가) -->
+      <!-- 탭 3: 인증 피드 -->
       <div id="tab-feed" class="tab-content" style="display:none;">
         <div class="section-header">
           <h3>📸 오늘의 인증 피드</h3>
@@ -284,34 +283,8 @@
     </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, get, onValue, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
-
-    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
-    let db = null;
-
-    if (isFirebaseConfigured) {
-      try {
-        const app = initializeApp(firebaseConfig);
-        db = getDatabase(app);
-      } catch (e) {
-        console.error("Firebase 초기화 실패:", e);
-      }
-    }
-
-    const getTodayString = () => new Date().toISOString().split('T')[0];
-
+  <script>
+    // 학번 선택 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
     for (let i = 1; i <= 31; i++) {
       const opt = document.createElement('option');
@@ -325,7 +298,8 @@
     let globalStudents = JSON.parse(localStorage.getItem('localStudents')) || {};
     let globalFeeds = JSON.parse(localStorage.getItem('localFeeds')) || [];
 
-    document.getElementById('login-btn').addEventListener('click', async () => {
+    // 로그인 처리 (버튼 클릭 시 막힘 없이 즉시 입장)
+    document.getElementById('login-btn').addEventListener('click', () => {
       const id = parseInt(studentSelect.value);
       const name = document.getElementById('nickname').value.trim();
 
@@ -337,30 +311,12 @@
       currentUser.id = id;
       currentUser.name = name;
 
-      if (isFirebaseConfigured && db) {
-        try {
-          const snapshot = await get(child(ref(db), `students/${id}`));
-          if (snapshot.exists()) {
-            const data = snapshot.val();
-            currentUser.points = data.points || 0;
-            currentUser.hours = data.hours || 0;
-          }
-          await set(ref(db, `students/${id}`), {
-            id: currentUser.id,
-            name: currentUser.name,
-            points: currentUser.points,
-            hours: currentUser.hours
-          });
-          listenToDatabaseChanges();
-        } catch (err) {
-          console.error("DB 연동 오류:", err);
-        }
+      // 로컬 데이터 로드
+      if (globalStudents[id]) {
+        currentUser.points = globalStudents[id].points || 0;
+        currentUser.hours = globalStudents[id].hours || 0;
       } else {
-        if (globalStudents[id]) {
-          currentUser.points = globalStudents[id].points || 0;
-          currentUser.hours = globalStudents[id].hours || 0;
-        }
-        globalStudents[id] = { id, name, points: currentUser.points, hours: currentUser.hours };
+        globalStudents[id] = { id, name, points: 0, hours: 0 };
         localStorage.setItem('localStudents', JSON.stringify(globalStudents));
       }
 
@@ -368,33 +324,12 @@
       renderRanking();
       renderFeed();
 
+      // 화면 전환
       document.getElementById('login-screen').classList.remove('active');
       document.getElementById('main-screen').classList.add('active');
     });
 
-    function listenToDatabaseChanges() {
-      onValue(ref(db, 'students'), (snapshot) => {
-        globalStudents = snapshot.val() || {};
-        renderRanking();
-        if (globalStudents[currentUser.id]) {
-          currentUser.points = globalStudents[currentUser.id].points || 0;
-          currentUser.hours = globalStudents[currentUser.id].hours || 0;
-        } else {
-          currentUser.points = 0;
-          currentUser.hours = 0;
-        }
-        updateUserInfoUI();
-      });
-
-      const today = getTodayString();
-      onValue(ref(db, `feeds/${today}`), (snapshot) => {
-        const data = snapshot.val();
-        globalFeeds = data ? Object.values(data).reverse() : [];
-        renderFeed();
-      });
-    }
-
-    window.switchTab = function(tabName) {
+    function switchTab(tabName) {
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
 
@@ -403,7 +338,7 @@
       
       if (tabName === 'rank') renderRanking();
       if (tabName === 'feed') renderFeed();
-    };
+    }
 
     function updateUserInfoUI() {
       document.getElementById('user-display-id').innerText = `${currentUser.id}번`;
@@ -411,13 +346,13 @@
       document.getElementById('user-points').innerText = currentUser.points;
     }
 
-    window.calculatePoints = function() {
+    function calculatePoints() {
       const hours = parseFloat(document.getElementById('study-hours').value) || 0;
       const expected = Math.floor(hours * 10);
       document.getElementById('expected-points').innerText = expected;
-    };
+    }
 
-    window.previewImage = function(event) {
+    function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
@@ -443,9 +378,9 @@
         };
         reader.readAsDataURL(file);
       }
-    };
+    }
 
-    window.submitAuth = async function() {
+    function submitAuth() {
       const hoursInput = parseFloat(document.getElementById('study-hours').value);
       const memo = document.getElementById('study-memo').value.trim();
 
@@ -462,86 +397,55 @@
       currentUser.points += earnedPoints;
       currentUser.hours = (parseFloat(currentUser.hours) + hoursInput).toFixed(1);
 
-      if (isFirebaseConfigured && db) {
-        await set(ref(db, `students/${currentUser.id}`), {
-          id: currentUser.id,
-          name: currentUser.name,
-          points: currentUser.points,
-          hours: currentUser.hours
-        });
+      // 데이터 저장
+      globalStudents[currentUser.id] = {
+        id: currentUser.id,
+        name: currentUser.name,
+        points: currentUser.points,
+        hours: currentUser.hours
+      };
 
-        const today = getTodayString();
-        await set(ref(db, `feeds/${today}/${Date.now()}`), {
-          studentId: currentUser.id,
-          name: currentUser.name,
-          hours: hoursInput,
-          memo: memo || '오늘도 열공 완료!',
-          img: uploadedImageBase64,
-          time: new Date().toLocaleTimeString()
-        });
-      } else {
-        globalStudents[currentUser.id] = {
-          id: currentUser.id,
-          name: currentUser.name,
-          points: currentUser.points,
-          hours: currentUser.hours
-        };
-        globalFeeds.unshift({
-          studentId: currentUser.id,
-          name: currentUser.name,
-          hours: hoursInput,
-          memo: memo || '오늘도 열공 완료!',
-          img: uploadedImageBase64,
-          time: new Date().toLocaleTimeString()
-        });
+      globalFeeds.unshift({
+        studentId: currentUser.id,
+        name: currentUser.name,
+        hours: hoursInput,
+        memo: memo || '오늘도 열공 완료!',
+        img: uploadedImageBase64,
+        time: new Date().toLocaleTimeString()
+      });
 
-        localStorage.setItem('localStudents', JSON.stringify(globalStudents));
-        localStorage.setItem('localFeeds', JSON.stringify(globalFeeds));
-      }
+      localStorage.setItem('localStudents', JSON.stringify(globalStudents));
+      localStorage.setItem('localFeeds', JSON.stringify(globalFeeds));
 
       alert(`인증 완료! ${earnedPoints}pt가 적립되었습니다.`);
       updateUserInfoUI();
 
+      // 입력란 초기화
       document.getElementById('study-hours').value = '';
       document.getElementById('study-memo').value = '';
       document.getElementById('preview-img').style.display = 'none';
       document.getElementById('expected-points').innerText = '0';
       uploadedImageBase64 = null;
-    };
+    }
 
-    // 추가된 함수 1: 전체 순위 및 포인트 데이터 초기화
-    window.resetRankingData = async function() {
-      if (!confirm("모든 학생의 누적 포인트와 공부시간을 0으로 초기화하시겠습니까?")) return;
-
-      if (isFirebaseConfigured && db) {
-        await remove(ref(db, 'students'));
-      } else {
-        globalStudents = {};
-        localStorage.removeItem('localStudents');
-      }
-
+    function resetRankingData() {
+      if (!confirm("모든 순위와 포인트 데이터를 초기화하시겠습니까?")) return;
+      globalStudents = {};
+      localStorage.removeItem('localStudents');
       currentUser.points = 0;
       currentUser.hours = 0;
       updateUserInfoUI();
       renderRanking();
-      alert("모든 학생 순위와 포인트 데이터가 초기화되었습니다.");
-    };
+      alert("순위 데이터가 초기화되었습니다.");
+    }
 
-    // 추가된 함수 2: 오늘의 피드 사진 목록 초기화
-    window.resetFeedData = async function() {
+    function resetFeedData() {
       if (!confirm("오늘 등록된 모든 인증 피드를 삭제하시겠습니까?")) return;
-
-      const today = getTodayString();
-      if (isFirebaseConfigured && db) {
-        await remove(ref(db, `feeds/${today}`));
-      } else {
-        globalFeeds = [];
-        localStorage.removeItem('localFeeds');
-      }
-
+      globalFeeds = [];
+      localStorage.removeItem('localFeeds');
       renderFeed();
-      alert("오늘의 인증 피드가 초기화되었습니다.");
-    };
+      alert("인증 피드가 초기화되었습니다.");
+    }
 
     function renderRanking() {
       const studentList = [];
@@ -598,7 +502,7 @@
       feedContainer.innerHTML = '';
 
       if (globalFeeds.length === 0) {
-        feedContainer.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">오늘 등록된 인증샷이 아직 없습니다.</p>';
+        feedContainer.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">등록된 인증샷이 아직 없습니다.</p>';
         return;
       }
 
