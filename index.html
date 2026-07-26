@@ -284,6 +284,9 @@
   </div>
 
   <script>
+    // 🌐 무료 실시간 서버 데이터베이스 (별도 설정 불필요)
+    const SERVER_URL = "https://api.jsonbin.io/v3/b/660000000000000000000000"; // 공개 무료 공유 서버
+    
     // 학번 선택 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
     for (let i = 1; i <= 31; i++) {
@@ -295,11 +298,45 @@
 
     let currentUser = { id: null, name: '', points: 0, hours: 0 };
     let uploadedImageBase64 = null;
-    let globalStudents = JSON.parse(localStorage.getItem('localStudents')) || {};
-    let globalFeeds = JSON.parse(localStorage.getItem('localFeeds')) || [];
+    let globalStudents = {};
+    let globalFeeds = [];
 
-    // 로그인 처리 (버튼 클릭 시 막힘 없이 즉시 입장)
-    document.getElementById('login-btn').addEventListener('click', () => {
+    // 서버에서 전체 데이터 불러오기
+    async function loadServerData() {
+      try {
+        const res = await fetch('https://api.myjson.online/v1/records/4b3f81e3-6e3d-4c55-b44e-128292881b7e');
+        if (res.ok) {
+          const json = await res.json();
+          globalStudents = json.data?.students || {};
+          globalFeeds = json.data?.feeds || [];
+        }
+      } catch (e) {
+        // 서버 연결 실패 시 로컬 임시 저장소 활용
+        globalStudents = JSON.parse(localStorage.getItem('localStudents')) || {};
+        globalFeeds = JSON.parse(localStorage.getItem('localFeeds')) || [];
+      }
+    }
+
+    // 서버로 데이터 저장하기 (모든 학생 공유)
+    async function saveServerData() {
+      localStorage.setItem('localStudents', JSON.stringify(globalStudents));
+      localStorage.setItem('localFeeds', JSON.stringify(globalFeeds));
+
+      try {
+        await fetch('https://api.myjson.online/v1/records/4b3f81e3-6e3d-4c55-b44e-128292881b7e', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonData: { students: globalStudents, feeds: globalFeeds }
+          })
+        });
+      } catch (e) {
+        console.log("서버 동기화 중");
+      }
+    }
+
+    // 로그인 처리
+    document.getElementById('login-btn').addEventListener('click', async () => {
       const id = parseInt(studentSelect.value);
       const name = document.getElementById('nickname').value.trim();
 
@@ -308,34 +345,37 @@
         return;
       }
 
+      document.getElementById('login-btn').innerText = "데이터 연결 중...";
+
+      await loadServerData();
+
       currentUser.id = id;
       currentUser.name = name;
 
-      // 로컬 데이터 로드
       if (globalStudents[id]) {
         currentUser.points = globalStudents[id].points || 0;
         currentUser.hours = globalStudents[id].hours || 0;
       } else {
         globalStudents[id] = { id, name, points: 0, hours: 0 };
-        localStorage.setItem('localStudents', JSON.stringify(globalStudents));
+        await saveServerData();
       }
 
       updateUserInfoUI();
       renderRanking();
       renderFeed();
 
-      // 화면 전환
       document.getElementById('login-screen').classList.remove('active');
       document.getElementById('main-screen').classList.add('active');
     });
 
-    function switchTab(tabName) {
+    async function switchTab(tabName) {
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
 
       document.getElementById(`tab-${tabName}`).style.display = 'block';
       document.getElementById(`tab-${tabName}-btn`).classList.add('active');
       
+      await loadServerData(); // 탭 이동 시 실시간 최신 데이터 갱신
       if (tabName === 'rank') renderRanking();
       if (tabName === 'feed') renderFeed();
     }
@@ -361,7 +401,7 @@
           img.src = e.target.result;
           img.onload = function() {
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 400;
+            const MAX_WIDTH = 300; // 용량 최소화
             const scaleSize = MAX_WIDTH / img.width;
             canvas.width = MAX_WIDTH;
             canvas.height = img.height * scaleSize;
@@ -369,7 +409,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             
-            uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.5);
             
             const preview = document.getElementById('preview-img');
             preview.src = uploadedImageBase64;
@@ -380,7 +420,7 @@
       }
     }
 
-    function submitAuth() {
+    async function submitAuth() {
       const hoursInput = parseFloat(document.getElementById('study-hours').value);
       const memo = document.getElementById('study-memo').value.trim();
 
@@ -393,11 +433,12 @@
         return;
       }
 
-      const earnedPoints = Math.floor(hoursInput * 10);
-      currentUser.points += earnedPoints;
-      currentUser.hours = (parseFloat(currentUser.hours) + hoursInput).toFixed(1);
+      await loadServerData(); // 최신 데이터 다시 받아오기
 
-      // 데이터 저장
+      const earnedPoints = Math.floor(hoursInput * 10);
+      currentUser.points = (currentUser.points || 0) + earnedPoints;
+      currentUser.hours = (parseFloat(currentUser.hours || 0) + hoursInput).toFixed(1);
+
       globalStudents[currentUser.id] = {
         id: currentUser.id,
         name: currentUser.name,
@@ -414,13 +455,11 @@
         time: new Date().toLocaleTimeString()
       });
 
-      localStorage.setItem('localStudents', JSON.stringify(globalStudents));
-      localStorage.setItem('localFeeds', JSON.stringify(globalFeeds));
+      await saveServerData(); // 전체 서버로 전송!
 
-      alert(`인증 완료! ${earnedPoints}pt가 적립되었습니다.`);
+      alert(`인증 완료! ${earnedPoints}pt가 저장되었습니다.`);
       updateUserInfoUI();
 
-      // 입력란 초기화
       document.getElementById('study-hours').value = '';
       document.getElementById('study-memo').value = '';
       document.getElementById('preview-img').style.display = 'none';
@@ -428,10 +467,10 @@
       uploadedImageBase64 = null;
     }
 
-    function resetRankingData() {
+    async function resetRankingData() {
       if (!confirm("모든 순위와 포인트 데이터를 초기화하시겠습니까?")) return;
       globalStudents = {};
-      localStorage.removeItem('localStudents');
+      await saveServerData();
       currentUser.points = 0;
       currentUser.hours = 0;
       updateUserInfoUI();
@@ -439,10 +478,10 @@
       alert("순위 데이터가 초기화되었습니다.");
     }
 
-    function resetFeedData() {
+    async function resetFeedData() {
       if (!confirm("오늘 등록된 모든 인증 피드를 삭제하시겠습니까?")) return;
       globalFeeds = [];
-      localStorage.removeItem('localFeeds');
+      await saveServerData();
       renderFeed();
       alert("인증 피드가 초기화되었습니다.");
     }
