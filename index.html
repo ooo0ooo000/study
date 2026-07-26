@@ -1,0 +1,620 @@
+<!DOCTYPEA html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>실시간 학급 공부시간 인증 웹</title>
+  <style>
+    :root {
+      --primary-color: #4A90E2;
+      --bg-color: #F5F7FA;
+      --card-bg: #FFFFFF;
+      --text-color: #333333;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px 10px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .screen.active {
+      display: flex;
+    }
+
+    h1, h2, h3 { text-align: center; color: #1A252C; }
+
+    button {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { background-color: #357ABD; }
+
+    /* 초기화 전용 작은 버튼 */
+    .btn-reset {
+      background-color: #FF6B6B;
+      color: white;
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-reset:hover {
+      background-color: #E03131;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    label { font-size: 14px; font-weight: 600; }
+    select, input[type="text"], input[type="number"], textarea {
+      padding: 12px;
+      border: 1px solid #DDD;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .nav-tabs { display: flex; gap: 8px; }
+    .nav-tabs button {
+      flex: 1;
+      background-color: #E9ECEF;
+      color: #495057;
+      padding: 10px 4px;
+      font-size: 13px;
+    }
+    .nav-tabs button.active {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .user-info-card {
+      background-color: #EBF3FA;
+      padding: 16px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    .notice { font-size: 12px; color: #6C757D; text-align: right; }
+
+    .image-upload-box {
+      border: 2px dashed #CBD5E1;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      background-color: #F8FAFC;
+    }
+    .image-preview {
+      max-width: 100%;
+      max-height: 200px;
+      margin-top: 10px;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .points-preview {
+      background-color: #FFF9DB;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: bold;
+      color: #856404;
+    }
+
+    .hall-of-fame {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      background: linear-gradient(180deg, #FFF9C4 0%, #FFF 100%);
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #FFE082;
+    }
+    .rank-podium {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .rank-podium.rank-1 { order: 2; font-size: 1.1em; }
+    .rank-podium.rank-2 { order: 1; }
+    .rank-podium.rank-3 { order: 3; }
+
+    .ranking-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .ranking-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      background-color: #F8FAFC;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .feed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 450px;
+      overflow-y: auto;
+    }
+    .feed-card {
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feed-img {
+      width: 100%;
+      border-radius: 8px;
+      object-fit: cover;
+      max-height: 250px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- [화면 1] 로그인 -->
+    <div id="login-screen" class="screen active">
+      <h1>📚 공부시간 인증</h1>
+      <div class="form-group">
+        <label for="student-id">학번 선택 (1번~31번)</label>
+        <select id="student-id"></select>
+      </div>
+      <div class="form-group">
+        <label for="nickname">닉네임</label>
+        <input type="text" id="nickname" placeholder="닉네임을 입력하세요">
+      </div>
+      <button id="login-btn">입장하기</button>
+    </div>
+
+    <!-- [화면 2] 메인 -->
+    <div id="main-screen" class="screen">
+      <div class="nav-tabs">
+        <button id="tab-auth-btn" class="active" onclick="switchTab('auth')">공부 인증</button>
+        <button id="tab-rank-btn" onclick="switchTab('rank')">순위 보기</button>
+        <button id="tab-feed-btn" onclick="switchTab('feed')">인증 피드</button>
+      </div>
+
+      <div class="user-info-card">
+        <div><span id="user-display-id">0번</span> (<span id="user-display-name">사용자</span>)</div>
+        <div>보유 포인트: <span id="user-points" style="color:var(--primary-color);">0</span> pt</div>
+      </div>
+
+      <!-- 탭 1: 공부 인증 -->
+      <div id="tab-auth" class="tab-content">
+        <div class="notice">💡 1시간당 10pt가 적립됩니다!</div>
+        
+        <div class="form-group" style="margin-top:10px;">
+          <label for="study-hours">오늘 공부한 시간 (시간 단위)</label>
+          <input type="number" id="study-hours" min="0.5" step="0.5" placeholder="예: 2.5" oninput="calculatePoints()">
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+          <label for="study-memo">오늘 공부한 내용</label>
+          <textarea id="study-memo" rows="3" placeholder="예) 수학 문제집 5페이지 풀기"></textarea>
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+          <label>공부 인증 사진 (필수)</label>
+          <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
+            📷 클릭하여 사진 첨부하기
+            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+            <img id="preview-img" class="image-preview" alt="미리보기">
+          </div>
+        </div>
+
+        <div class="points-preview" style="margin-top:15px;">
+          획득 예정 포인트: <span id="expected-points">0</span> pt
+        </div>
+
+        <button style="margin-top:15px; width:100%;" onclick="submitAuth()">공부 인증 등록하기</button>
+      </div>
+
+      <!-- 탭 2: 포인트 랭킹 (명예의 전당 영역 우상단에 초기화 버튼 추가) -->
+      <div id="tab-rank" class="tab-content" style="display:none;">
+        <div class="section-header">
+          <h3>🏆 명예의 전당</h3>
+          <button class="btn-reset" onclick="resetRankingData()">순위/포인트 초기화</button>
+        </div>
+        <div class="hall-of-fame" id="hall-of-fame"></div>
+
+        <h3 style="margin:20px 0 10px 0;">📊 학급 전체 랭킹</h3>
+        <div class="ranking-list" id="full-ranking-list"></div>
+      </div>
+
+      <!-- 탭 3: 인증 피드 (피드 영역 우상단에 초기화 버튼 추가) -->
+      <div id="tab-feed" class="tab-content" style="display:none;">
+        <div class="section-header">
+          <h3>📸 오늘의 인증 피드</h3>
+          <button class="btn-reset" onclick="resetFeedData()">피드 초기화</button>
+        </div>
+        <div class="feed-list" id="feed-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get, onValue, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+      projectId: "YOUR_PROJECT",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
+    let db = null;
+
+    if (isFirebaseConfigured) {
+      try {
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+      } catch (e) {
+        console.error("Firebase 초기화 실패:", e);
+      }
+    }
+
+    const getTodayString = () => new Date().toISOString().split('T')[0];
+
+    const studentSelect = document.getElementById('student-id');
+    for (let i = 1; i <= 31; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.innerText = `${i}번 학생`;
+      studentSelect.appendChild(opt);
+    }
+
+    let currentUser = { id: null, name: '', points: 0, hours: 0 };
+    let uploadedImageBase64 = null;
+    let globalStudents = JSON.parse(localStorage.getItem('localStudents')) || {};
+    let globalFeeds = JSON.parse(localStorage.getItem('localFeeds')) || [];
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const id = parseInt(studentSelect.value);
+      const name = document.getElementById('nickname').value.trim();
+
+      if (!name) {
+        alert('닉네임을 입력해 주세요!');
+        return;
+      }
+
+      currentUser.id = id;
+      currentUser.name = name;
+
+      if (isFirebaseConfigured && db) {
+        try {
+          const snapshot = await get(child(ref(db), `students/${id}`));
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            currentUser.points = data.points || 0;
+            currentUser.hours = data.hours || 0;
+          }
+          await set(ref(db, `students/${id}`), {
+            id: currentUser.id,
+            name: currentUser.name,
+            points: currentUser.points,
+            hours: currentUser.hours
+          });
+          listenToDatabaseChanges();
+        } catch (err) {
+          console.error("DB 연동 오류:", err);
+        }
+      } else {
+        if (globalStudents[id]) {
+          currentUser.points = globalStudents[id].points || 0;
+          currentUser.hours = globalStudents[id].hours || 0;
+        }
+        globalStudents[id] = { id, name, points: currentUser.points, hours: currentUser.hours };
+        localStorage.setItem('localStudents', JSON.stringify(globalStudents));
+      }
+
+      updateUserInfoUI();
+      renderRanking();
+      renderFeed();
+
+      document.getElementById('login-screen').classList.remove('active');
+      document.getElementById('main-screen').classList.add('active');
+    });
+
+    function listenToDatabaseChanges() {
+      onValue(ref(db, 'students'), (snapshot) => {
+        globalStudents = snapshot.val() || {};
+        renderRanking();
+        if (globalStudents[currentUser.id]) {
+          currentUser.points = globalStudents[currentUser.id].points || 0;
+          currentUser.hours = globalStudents[currentUser.id].hours || 0;
+        } else {
+          currentUser.points = 0;
+          currentUser.hours = 0;
+        }
+        updateUserInfoUI();
+      });
+
+      const today = getTodayString();
+      onValue(ref(db, `feeds/${today}`), (snapshot) => {
+        const data = snapshot.val();
+        globalFeeds = data ? Object.values(data).reverse() : [];
+        renderFeed();
+      });
+    }
+
+    window.switchTab = function(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
+
+      document.getElementById(`tab-${tabName}`).style.display = 'block';
+      document.getElementById(`tab-${tabName}-btn`).classList.add('active');
+      
+      if (tabName === 'rank') renderRanking();
+      if (tabName === 'feed') renderFeed();
+    };
+
+    function updateUserInfoUI() {
+      document.getElementById('user-display-id').innerText = `${currentUser.id}번`;
+      document.getElementById('user-display-name').innerText = currentUser.name;
+      document.getElementById('user-points').innerText = currentUser.points;
+    }
+
+    window.calculatePoints = function() {
+      const hours = parseFloat(document.getElementById('study-hours').value) || 0;
+      const expected = Math.floor(hours * 10);
+      document.getElementById('expected-points').innerText = expected;
+    };
+
+    window.previewImage = function(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.src = e.target.result;
+          img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 400;
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            
+            const preview = document.getElementById('preview-img');
+            preview.src = uploadedImageBase64;
+            preview.style.display = 'block';
+          };
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+
+    window.submitAuth = async function() {
+      const hoursInput = parseFloat(document.getElementById('study-hours').value);
+      const memo = document.getElementById('study-memo').value.trim();
+
+      if (!hoursInput || hoursInput <= 0) {
+        alert('공부 시간을 올바르게 입력해 주세요!');
+        return;
+      }
+      if (!uploadedImageBase64) {
+        alert('인증 사진을 반드시 첨부해 주셔야 합니다!');
+        return;
+      }
+
+      const earnedPoints = Math.floor(hoursInput * 10);
+      currentUser.points += earnedPoints;
+      currentUser.hours = (parseFloat(currentUser.hours) + hoursInput).toFixed(1);
+
+      if (isFirebaseConfigured && db) {
+        await set(ref(db, `students/${currentUser.id}`), {
+          id: currentUser.id,
+          name: currentUser.name,
+          points: currentUser.points,
+          hours: currentUser.hours
+        });
+
+        const today = getTodayString();
+        await set(ref(db, `feeds/${today}/${Date.now()}`), {
+          studentId: currentUser.id,
+          name: currentUser.name,
+          hours: hoursInput,
+          memo: memo || '오늘도 열공 완료!',
+          img: uploadedImageBase64,
+          time: new Date().toLocaleTimeString()
+        });
+      } else {
+        globalStudents[currentUser.id] = {
+          id: currentUser.id,
+          name: currentUser.name,
+          points: currentUser.points,
+          hours: currentUser.hours
+        };
+        globalFeeds.unshift({
+          studentId: currentUser.id,
+          name: currentUser.name,
+          hours: hoursInput,
+          memo: memo || '오늘도 열공 완료!',
+          img: uploadedImageBase64,
+          time: new Date().toLocaleTimeString()
+        });
+
+        localStorage.setItem('localStudents', JSON.stringify(globalStudents));
+        localStorage.setItem('localFeeds', JSON.stringify(globalFeeds));
+      }
+
+      alert(`인증 완료! ${earnedPoints}pt가 적립되었습니다.`);
+      updateUserInfoUI();
+
+      document.getElementById('study-hours').value = '';
+      document.getElementById('study-memo').value = '';
+      document.getElementById('preview-img').style.display = 'none';
+      document.getElementById('expected-points').innerText = '0';
+      uploadedImageBase64 = null;
+    };
+
+    // 추가된 함수 1: 전체 순위 및 포인트 데이터 초기화
+    window.resetRankingData = async function() {
+      if (!confirm("모든 학생의 누적 포인트와 공부시간을 0으로 초기화하시겠습니까?")) return;
+
+      if (isFirebaseConfigured && db) {
+        await remove(ref(db, 'students'));
+      } else {
+        globalStudents = {};
+        localStorage.removeItem('localStudents');
+      }
+
+      currentUser.points = 0;
+      currentUser.hours = 0;
+      updateUserInfoUI();
+      renderRanking();
+      alert("모든 학생 순위와 포인트 데이터가 초기화되었습니다.");
+    };
+
+    // 추가된 함수 2: 오늘의 피드 사진 목록 초기화
+    window.resetFeedData = async function() {
+      if (!confirm("오늘 등록된 모든 인증 피드를 삭제하시겠습니까?")) return;
+
+      const today = getTodayString();
+      if (isFirebaseConfigured && db) {
+        await remove(ref(db, `feeds/${today}`));
+      } else {
+        globalFeeds = [];
+        localStorage.removeItem('localFeeds');
+      }
+
+      renderFeed();
+      alert("오늘의 인증 피드가 초기화되었습니다.");
+    };
+
+    function renderRanking() {
+      const studentList = [];
+      for (let i = 1; i <= 31; i++) {
+        if (globalStudents[i]) {
+          studentList.push(globalStudents[i]);
+        } else {
+          studentList.push({ id: i, name: `학생${i}`, points: 0, hours: 0 });
+        }
+      }
+
+      studentList.sort((a, b) => b.points - a.points);
+
+      const top1 = studentList[0] || {};
+      const top2 = studentList[1] || {};
+      const top3 = studentList[2] || {};
+
+      document.getElementById('hall-of-fame').innerHTML = `
+        <div class="rank-podium rank-2">
+          <div>🥈</div>
+          <strong>2등</strong>
+          <small>${top2.id ? top2.id + '번 ' + top2.name : '-'}</small>
+          <span>${top2.points || 0}pt</span>
+        </div>
+        <div class="rank-podium rank-1">
+          <div>👑</div>
+          <strong>1등</strong>
+          <small>${top1.id ? top1.id + '번 ' + top1.name : '-'}</small>
+          <span>${top1.points || 0}pt</span>
+        </div>
+        <div class="rank-podium rank-3">
+          <div>🥉</div>
+          <strong>3등</strong>
+          <small>${top3.id ? top3.id + '번 ' + top3.name : '-'}</small>
+          <span>${top3.points || 0}pt</span>
+        </div>
+      `;
+
+      const listContainer = document.getElementById('full-ranking-list');
+      listContainer.innerHTML = '';
+      studentList.forEach((student, index) => {
+        const item = document.createElement('div');
+        item.className = 'ranking-item';
+        item.innerHTML = `
+          <div><strong>${index + 1}위</strong> - ${student.id}번 ${student.name}</div>
+          <div>${student.hours || 0}시간 (${student.points || 0}pt)</div>
+        `;
+        listContainer.appendChild(item);
+      });
+    }
+
+    function renderFeed() {
+      const feedContainer = document.getElementById('feed-list');
+      feedContainer.innerHTML = '';
+
+      if (globalFeeds.length === 0) {
+        feedContainer.innerHTML = '<p style="text-align:center; color:#888; padding:20px;">오늘 등록된 인증샷이 아직 없습니다.</p>';
+        return;
+      }
+
+      globalFeeds.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'feed-card';
+        card.innerHTML = `
+          <div style="font-weight:bold; font-size:14px;">
+            ${item.studentId}번 ${item.name} (${item.hours}시간 인증) <span style="font-size:11px; color:#888;">${item.time}</span>
+          </div>
+          <img src="${item.img}" class="feed-img" alt="인증샷">
+          <div style="font-size:14px; color:#475569;">${item.memo}</div>
+        `;
+        feedContainer.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>
