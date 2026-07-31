@@ -113,7 +113,7 @@
       font-weight: bold;
     }
 
-    /* 이미지 선택 버튼 레이아웃 */
+    /* 업로드 옵션 버튼 */
     .image-select-buttons {
       display: flex;
       gap: 10px;
@@ -261,18 +261,18 @@
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
           <div class="image-select-buttons">
-            <!-- 카메라 직접 촬영 버튼 (capture="environment") -->
-            <button class="btn-upload-option" type="button" onclick="document.getElementById('camera-input').click()">
+            <!-- 바로 촬영 (camera 모드 호환 강화) -->
+            <button class="btn-upload-option" type="button" onclick="triggerCamera()">
               📸 바로 촬영
             </button>
-            <!-- 앨범/갤러리 선택 버튼 -->
-            <button class="btn-upload-option" type="button" onclick="document.getElementById('gallery-input').click()">
+            <!-- 갤러리 선택 -->
+            <button class="btn-upload-option" type="button" onclick="triggerGallery()">
               🖼️ 갤러리 선택
             </button>
           </div>
 
-          <!-- 숨겨진 input 태그들 -->
-          <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
+          <!-- 숨겨진 input 엘리먼트 -->
+          <input type="file" id="camera-input" accept="image/*" capture="camera" style="display:none;" onchange="previewImage(event)">
           <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
 
           <div class="image-preview-container">
@@ -323,9 +323,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 관리자 비밀번호
     const ADMIN_PASSWORD = "1029384756";
-    // 피드에 보관할 최대 사진 개수 (초과 시 선입선출 자동 삭제)
     const MAX_FEED_COUNT = 30;
 
     // 학번 드롭다운 생성 (1~31번)
@@ -339,6 +337,19 @@
 
     let currentUser = { id: null, name: '', points: 0, hours: 0 };
     let uploadedImageBase64 = null;
+
+    // 카메라 및 갤러리 트리거 함수
+    function triggerCamera() {
+      const input = document.getElementById('camera-input');
+      input.value = '';
+      input.click();
+    }
+
+    function triggerGallery() {
+      const input = document.getElementById('gallery-input');
+      input.value = '';
+      input.click();
+    }
 
     // 실시간 DB 동기화
     function startRealtimeSync() {
@@ -410,7 +421,7 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 이미지 파일 용량 초압축 및 미리보기 (해상도 200px, 화질 20%)
+    // 이미지 용량 압축 처리 (해상도 200px, 화질 20%)
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
@@ -435,7 +446,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // 압축 처리
+            // 압축 데이터 생성
             uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.2);
             
             document.getElementById('preview-img').src = uploadedImageBase64;
@@ -446,7 +457,6 @@
       }
     }
 
-    // 선입선출(FIFO) 피드 정리 함수
     function cleanOldFeeds() {
       db.ref('feeds').once('value').then((snapshot) => {
         const data = snapshot.val();
@@ -462,7 +472,7 @@
       });
     }
 
-    // 공부 인증 등록
+    // 인증 등록
     function submitAuth() {
       const hours = parseFloat(document.getElementById('study-hours').value);
       const memo = document.getElementById('study-memo').value.trim();
@@ -476,7 +486,6 @@
       const newPoints = currentPoints + Math.floor(hours * 10);
       const newHours = (currentHours + hours).toFixed(1);
 
-      // 학생 점수 및 시간 누적
       db.ref(`students/${currentUser.id}`).set({
         id: currentUser.id,
         name: currentUser.name,
@@ -484,7 +493,6 @@
         hours: parseFloat(newHours)
       });
 
-      // 피드에 등록
       db.ref('feeds').push({
         studentId: currentUser.id,
         name: currentUser.name,
@@ -501,12 +509,9 @@
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
-      document.getElementById('camera-input').value = '';
-      document.getElementById('gallery-input').value = '';
       uploadedImageBase64 = null;
     }
 
-    // 비밀번호 잠금이 추가된 데이터 전체 초기화 함수
     function resetAllData() {
       const inputPassword = prompt("관리자 비밀번호를 입력하세요:");
       
@@ -524,7 +529,6 @@
       }
     }
 
-    // 랭킹 렌더링
     function renderRanking(data) {
       const list = [];
       for (let i = 1; i <= 31; i++) {
@@ -569,7 +573,6 @@
       });
     }
 
-    // 피드 렌더링
     function renderFeed(feeds) {
       const feedContainer = document.getElementById('feed-list');
       feedContainer.innerHTML = '';
