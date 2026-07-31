@@ -244,10 +244,11 @@
 
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
-          <!-- 클릭 시 모바일 카메라를 바로 호출하는 업로드 영역 -->
+          <!-- 클릭 시 모바일에서 카메라/갤러리 선택 옵션창을 띄우는 업로드 영역 -->
           <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
-            📸 카메라로 사진 촬영하기
-            <input type="file" id="image-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
+            📸 카메라 촬영 또는 갤러리 사진 선택
+            <!-- accept="image/*"만 남겨두어 OS 기본 선택창(카메라 vs 갤러리)이 뜨도록 설정 -->
+            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
             <img id="preview-img" class="image-preview" alt="미리보기">
           </div>
         </div>
@@ -296,7 +297,7 @@
     const db = firebase.database();
 
     const ADMIN_PASSWORD = "1029384756";
-    const MAX_FEED_COUNT = 10; // 원본 용량 관리를 위해 유지할 최신 피드 수 (10개 초과 시 오래된 순 삭제)
+    const MAX_FEED_COUNT = 10; // 원본 용량 관리를 위해 피드는 최신 10개만 유지 (오래된 순 자동 삭제)
 
     // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
@@ -380,13 +381,13 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 원본 화질 그대로 읽어오기 (압축 로직 일절 없음)
+    // 원본 이미지 그대로 읽어오기
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          uploadedImageBase64 = e.target.result; // 원본 이미지 Base64 데이터 저장
+          uploadedImageBase64 = e.target.result; // 원본 이미지 데이터 저장
           document.getElementById('preview-img').src = uploadedImageBase64;
           document.getElementById('preview-img').style.display = 'block';
         };
@@ -394,7 +395,7 @@
       }
     }
 
-    // 용량이 다 차지 않도록 오래된 피드 자동 삭제 (FIFO)
+    // 오래된 피드 자동 삭제 (FIFO)
     function cleanOldFeeds() {
       db.ref('feeds').once('value').then((snapshot) => {
         const data = snapshot.val();
@@ -416,7 +417,7 @@
       const memo = document.getElementById('study-memo').value.trim();
 
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
-      if (!uploadedImageBase64) { alert('사진을 촬영해 주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 촬영하거나 갤러리에서 선택해 주세요!'); return; }
 
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
@@ -439,7 +440,7 @@
         img: uploadedImageBase64,
         time: new Date().toLocaleTimeString()
       }).then(() => {
-        cleanOldFeeds(); // 10개 이상 쌓이면 제일 오래된 인증샷 자동 삭제
+        cleanOldFeeds();
       });
 
       alert('인증이 완료되었습니다!');
