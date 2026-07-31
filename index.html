@@ -113,20 +113,39 @@
       font-weight: bold;
     }
 
-    .image-upload-box {
-      border: 2px dashed #CBD5E1;
+    /* 이미지 선택 버튼 레이아웃 */
+    .image-select-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-upload-option {
+      flex: 1;
+      background-color: #F1F5F9;
+      color: #334155;
+      border: 1px solid #CBD5E1;
+      padding: 12px 8px;
       border-radius: 8px;
-      padding: 20px;
+      font-size: 14px;
+      font-weight: 600;
       text-align: center;
       cursor: pointer;
-      background-color: #F8FAFC;
+      transition: all 0.2s ease;
+    }
+    .btn-upload-option:hover {
+      background-color: #E2E8F0;
+    }
+
+    .image-preview-container {
+      margin-top: 10px;
+      text-align: center;
     }
     .image-preview {
       max-width: 100%;
       max-height: 200px;
-      margin-top: 10px;
       border-radius: 8px;
       display: none;
+      margin: 0 auto;
+      border: 1px solid #E2E8F0;
     }
 
     .points-preview {
@@ -241,9 +260,22 @@
 
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
-          <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
-            📷 클릭하여 사진 첨부하기
-            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+          <div class="image-select-buttons">
+            <!-- 카메라 직접 촬영 버튼 (capture="environment") -->
+            <button class="btn-upload-option" type="button" onclick="document.getElementById('camera-input').click()">
+              📸 바로 촬영
+            </button>
+            <!-- 앨범/갤러리 선택 버튼 -->
+            <button class="btn-upload-option" type="button" onclick="document.getElementById('gallery-input').click()">
+              🖼️ 갤러리 선택
+            </button>
+          </div>
+
+          <!-- 숨겨진 input 태그들 -->
+          <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
+          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+
+          <div class="image-preview-container">
             <img id="preview-img" class="image-preview" alt="미리보기">
           </div>
         </div>
@@ -378,7 +410,7 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // ⚡ 이미지 파일 용량 초압축 처리 함수 (해상도 200px, 화질 20%)
+    // 이미지 파일 용량 초압축 및 미리보기 (해상도 200px, 화질 20%)
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
@@ -388,7 +420,6 @@
           img.src = e.target.result;
           img.onload = function() {
             const canvas = document.createElement('canvas');
-            // 최대 가로 폭을 200px로 제한하여 파일 크기를 극도로 낮춤
             const maxWidth = 200;
             let width = img.width;
             let height = img.height;
@@ -404,7 +435,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // 품질을 0.2(20%)로 압축하여 저장 ( 용량 약 5KB~10KB 미만으로 줄어듦 )
+            // 압축 처리
             uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.2);
             
             document.getElementById('preview-img').src = uploadedImageBase64;
@@ -415,7 +446,7 @@
       }
     }
 
-    // 선입선출(FIFO) 피드 정리 함수: MAX_FEED_COUNT(30개) 초과 시 가장 오래된 사진 삭제
+    // 선입선출(FIFO) 피드 정리 함수
     function cleanOldFeeds() {
       db.ref('feeds').once('value').then((snapshot) => {
         const data = snapshot.val();
@@ -437,7 +468,7 @@
       const memo = document.getElementById('study-memo').value.trim();
 
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
-      if (!uploadedImageBase64) { alert('사진을 올려주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 찍거나 첨부해 주세요!'); return; }
 
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
@@ -445,7 +476,7 @@
       const newPoints = currentPoints + Math.floor(hours * 10);
       const newHours = (currentHours + hours).toFixed(1);
 
-      // 학생 점수 및 시간 누적 (영구 저장)
+      // 학생 점수 및 시간 누적
       db.ref(`students/${currentUser.id}`).set({
         id: currentUser.id,
         name: currentUser.name,
@@ -453,7 +484,7 @@
         hours: parseFloat(newHours)
       });
 
-      // 피드에 압축된 인증샷 등록
+      // 피드에 등록
       db.ref('feeds').push({
         studentId: currentUser.id,
         name: currentUser.name,
@@ -462,7 +493,6 @@
         img: uploadedImageBase64,
         time: new Date().toLocaleTimeString()
       }).then(() => {
-        // 선입선출 정리 (최신 30개만 유지)
         cleanOldFeeds();
       });
 
@@ -471,7 +501,8 @@
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
-      document.getElementById('image-input').value = '';
+      document.getElementById('camera-input').value = '';
+      document.getElementById('gallery-input').value = '';
       uploadedImageBase64 = null;
     }
 
@@ -479,9 +510,7 @@
     function resetAllData() {
       const inputPassword = prompt("관리자 비밀번호를 입력하세요:");
       
-      if (inputPassword === null) {
-        return;
-      }
+      if (inputPassword === null) return;
 
       if (inputPassword === ADMIN_PASSWORD) {
         if (confirm('정말로 모든 학생의 포인트, 시간, 사진 기록을 삭제하고 초기화하시겠습니까?')) {
