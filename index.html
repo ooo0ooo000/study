@@ -125,7 +125,7 @@
 
     .image-preview {
       max-width: 100%;
-      max-height: 200px;
+      max-height: 250px;
       margin-top: 10px;
       border-radius: 8px;
       display: none;
@@ -192,7 +192,7 @@
       width: 100%;
       border-radius: 8px;
       object-fit: cover;
-      max-height: 250px;
+      max-height: 350px;
     }
   </style>
 
@@ -244,10 +244,10 @@
 
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
-          <!-- 클릭 시 모바일에서 카메라/갤러리 선택창을 띄우는 업로드 영역 -->
+          <!-- 클릭 시 모바일 카메라를 바로 호출하는 업로드 영역 -->
           <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
-            📸 카메라 촬영 또는 갤러리에서 사진 첨부
-            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+            📸 카메라로 사진 촬영하기
+            <input type="file" id="image-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
             <img id="preview-img" class="image-preview" alt="미리보기">
           </div>
         </div>
@@ -296,7 +296,7 @@
     const db = firebase.database();
 
     const ADMIN_PASSWORD = "1029384756";
-    const MAX_FEED_COUNT = 30;
+    const MAX_FEED_COUNT = 10; // 원본 용량 관리를 위해 유지할 최신 피드 수 (10개 초과 시 오래된 순 삭제)
 
     // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
@@ -358,7 +358,7 @@
         document.getElementById('login-screen').classList.remove('active');
         document.getElementById('main-screen').classList.add('active');
       }).catch(err => {
-        alert("파이어베이스 설정 오류! Realtime Database 규칙을 확인해주세요.");
+        alert("파이어베이스 연결을 확인해주세요.");
       });
     });
 
@@ -380,42 +380,21 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 이미지 용량 초압축 처리 (해상도 200px, 화질 20%)
+    // 원본 화질 그대로 읽어오기 (압축 로직 일절 없음)
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          const img = new Image();
-          img.src = e.target.result;
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const maxWidth = 200;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // 압축 데이터 생성 (용량 약 5KB~10KB)
-            uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.2);
-            
-            document.getElementById('preview-img').src = uploadedImageBase64;
-            document.getElementById('preview-img').style.display = 'block';
-          };
+          uploadedImageBase64 = e.target.result; // 원본 이미지 Base64 데이터 저장
+          document.getElementById('preview-img').src = uploadedImageBase64;
+          document.getElementById('preview-img').style.display = 'block';
         };
         reader.readAsDataURL(file);
       }
     }
 
+    // 용량이 다 차지 않도록 오래된 피드 자동 삭제 (FIFO)
     function cleanOldFeeds() {
       db.ref('feeds').once('value').then((snapshot) => {
         const data = snapshot.val();
@@ -437,7 +416,7 @@
       const memo = document.getElementById('study-memo').value.trim();
 
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
-      if (!uploadedImageBase64) { alert('사진을 촬영하거나 첨부해 주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 촬영해 주세요!'); return; }
 
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
@@ -460,10 +439,10 @@
         img: uploadedImageBase64,
         time: new Date().toLocaleTimeString()
       }).then(() => {
-        cleanOldFeeds();
+        cleanOldFeeds(); // 10개 이상 쌓이면 제일 오래된 인증샷 자동 삭제
       });
 
-      alert('인증이 등록되었습니다!');
+      alert('인증이 완료되었습니다!');
       document.getElementById('study-hours').value = '';
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
@@ -474,14 +453,13 @@
 
     function resetAllData() {
       const inputPassword = prompt("관리자 비밀번호를 입력하세요:");
-      
       if (inputPassword === null) return;
 
       if (inputPassword === ADMIN_PASSWORD) {
-        if (confirm('정말로 모든 학생의 포인트, 시간, 사진 기록을 삭제하고 초기화하시겠습니까?')) {
+        if (confirm('모든 학생 데이터 및 피드를 초기화하시겠습니까?')) {
           db.ref('students').remove();
           db.ref('feeds').remove().then(() => {
-            alert('모든 데이터가 성공적으로 초기화되었습니다.');
+            alert('데이터가 성공적으로 초기화되었습니다.');
           });
         }
       } else {
