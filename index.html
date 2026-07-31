@@ -83,7 +83,7 @@
       gap: 8px;
     }
     label { font-size: 14px; font-weight: 600; }
-    select, input[type="text"], input[type="number"], textarea {
+    select, input[type="text"], input[type="number"], textarea, input[type="file"] {
       padding: 12px;
       border: 1px solid #DDD;
       border-radius: 8px;
@@ -112,23 +112,6 @@
       align-items: center;
       font-weight: bold;
     }
-
-    /* 이미지 선택 버튼 그룹 스타일 */
-    .image-btn-group {
-      display: flex;
-      gap: 10px;
-    }
-    .image-btn-group button {
-      flex: 1;
-      padding: 14px 10px;
-      font-size: 14px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    .btn-camera { background-color: #2D3748; }
-    .btn-camera:hover { background-color: #1A202C; }
-    .btn-gallery { background-color: #4A5568; }
-    .btn-gallery:hover { background-color: #2D3748; }
 
     .image-preview {
       max-width: 100%;
@@ -203,7 +186,7 @@
     }
   </style>
 
-  <!-- 파이어베이스 SDK 로드 -->
+  <!-- 파이어베이스 SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
@@ -250,17 +233,10 @@
         </div>
 
         <div class="form-group" style="margin-top:15px;">
-          <label>공부 인증 사진 (필수)</label>
+          <label for="image-input">공부 인증 사진 (카메라/갤러리 선택)</label>
           
-          <!-- 명확하게 분리된 카메라 / 갤러리 선택 버튼 -->
-          <div class="image-btn-group">
-            <button type="button" class="btn-camera" onclick="document.getElementById('camera-input').click()">📸 카메라 촬영</button>
-            <button type="button" class="btn-gallery" onclick="document.getElementById('gallery-input').click()">🖼️ 갤러리 선택</button>
-          </div>
-
-          <!-- 실제 작동하는 파일 인풋 (숨김 처리) -->
-          <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
-          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+          <!-- capture 옵션 없이 accept="image/*"만 두어 스마트폰 OS 기본 선택창(카메라/갤러리)이 뜨도록 함 -->
+          <input type="file" id="image-input" accept="image/*" onchange="previewImage(event)">
 
           <!-- 미리보기 이미지 -->
           <img id="preview-img" class="image-preview" alt="미리보기">
@@ -310,7 +286,6 @@
     const db = firebase.database();
 
     const ADMIN_PASSWORD = "1029384756";
-    const MAX_FEED_COUNT = 10; // 피드는 최신 10개만 유지 (오래된 순 자동 삭제)
 
     // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
@@ -394,34 +369,18 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 원본 이미지 그대로 읽어오기 및 입력창 초기화
+    // 이미지 읽어오기
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          uploadedImageBase64 = e.target.result; // 원본 이미지 데이터 저장
+          uploadedImageBase64 = e.target.result;
           document.getElementById('preview-img').src = uploadedImageBase64;
           document.getElementById('preview-img').style.display = 'block';
         };
         reader.readAsDataURL(file);
       }
-    }
-
-    // 오래된 피드 자동 삭제 (FIFO)
-    function cleanOldFeeds() {
-      db.ref('feeds').once('value').then((snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const keys = Object.keys(data);
-          if (keys.length > MAX_FEED_COUNT) {
-            const overflowCount = keys.length - MAX_FEED_COUNT;
-            for (let i = 0; i < overflowCount; i++) {
-              db.ref(`feeds/${keys[i]}`).remove();
-            }
-          }
-        }
-      });
     }
 
     // 인증 등록
@@ -430,7 +389,7 @@
       const memo = document.getElementById('study-memo').value.trim();
 
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
-      if (!uploadedImageBase64) { alert('사진을 촬영하거나 갤러리에서 선택해 주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 등록해 주세요!'); return; }
 
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
@@ -452,8 +411,6 @@
         memo: memo || '오늘도 열공 완료!',
         img: uploadedImageBase64,
         time: new Date().toLocaleTimeString()
-      }).then(() => {
-        cleanOldFeeds();
       });
 
       alert('인증이 완료되었습니다!');
@@ -461,8 +418,7 @@
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
-      document.getElementById('camera-input').value = '';
-      document.getElementById('gallery-input').value = '';
+      document.getElementById('image-input').value = '';
       uploadedImageBase64 = null;
     }
 
