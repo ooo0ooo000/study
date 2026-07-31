@@ -113,38 +113,22 @@
       font-weight: bold;
     }
 
-    /* 업로드 옵션 버튼 */
-    .image-select-buttons {
-      display: flex;
-      gap: 10px;
-    }
-    .btn-upload-option {
-      flex: 1;
-      background-color: #F1F5F9;
-      color: #334155;
-      border: 1px solid #CBD5E1;
-      padding: 12px 8px;
+    /* 이미지 업로드 박스 */
+    .image-upload-box {
+      border: 2px dashed #CBD5E1;
       border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
+      padding: 20px;
       text-align: center;
       cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .btn-upload-option:hover {
-      background-color: #E2E8F0;
+      background-color: #F8FAFC;
     }
 
-    .image-preview-container {
-      margin-top: 10px;
-      text-align: center;
-    }
     .image-preview {
       max-width: 100%;
       max-height: 200px;
+      margin-top: 10px;
       border-radius: 8px;
       display: none;
-      margin: 0 auto;
       border: 1px solid #E2E8F0;
     }
 
@@ -260,22 +244,10 @@
 
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
-          <div class="image-select-buttons">
-            <!-- 바로 촬영 (camera 모드 호환 강화) -->
-            <button class="btn-upload-option" type="button" onclick="triggerCamera()">
-              📸 바로 촬영
-            </button>
-            <!-- 갤러리 선택 -->
-            <button class="btn-upload-option" type="button" onclick="triggerGallery()">
-              🖼️ 갤러리 선택
-            </button>
-          </div>
-
-          <!-- 숨겨진 input 엘리먼트 -->
-          <input type="file" id="camera-input" accept="image/*" capture="camera" style="display:none;" onchange="previewImage(event)">
-          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
-
-          <div class="image-preview-container">
+          <!-- 클릭 시 모바일에서 카메라/갤러리 선택창을 띄우는 업로드 영역 -->
+          <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
+            📸 카메라 촬영 또는 갤러리에서 사진 첨부
+            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
             <img id="preview-img" class="image-preview" alt="미리보기">
           </div>
         </div>
@@ -337,19 +309,6 @@
 
     let currentUser = { id: null, name: '', points: 0, hours: 0 };
     let uploadedImageBase64 = null;
-
-    // 카메라 및 갤러리 트리거 함수
-    function triggerCamera() {
-      const input = document.getElementById('camera-input');
-      input.value = '';
-      input.click();
-    }
-
-    function triggerGallery() {
-      const input = document.getElementById('gallery-input');
-      input.value = '';
-      input.click();
-    }
 
     // 실시간 DB 동기화
     function startRealtimeSync() {
@@ -421,7 +380,7 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 이미지 용량 압축 처리 (해상도 200px, 화질 20%)
+    // 이미지 용량 초압축 처리 (해상도 200px, 화질 20%)
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
@@ -446,7 +405,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // 압축 데이터 생성
+            // 압축 데이터 생성 (용량 약 5KB~10KB)
             uploadedImageBase64 = canvas.toDataURL('image/jpeg', 0.2);
             
             document.getElementById('preview-img').src = uploadedImageBase64;
@@ -478,7 +437,7 @@
       const memo = document.getElementById('study-memo').value.trim();
 
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
-      if (!uploadedImageBase64) { alert('사진을 찍거나 첨부해 주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 촬영하거나 첨부해 주세요!'); return; }
 
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
@@ -509,6 +468,7 @@
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
+      document.getElementById('image-input').value = '';
       uploadedImageBase64 = null;
     }
 
