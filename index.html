@@ -113,15 +113,22 @@
       font-weight: bold;
     }
 
-    /* 이미지 업로드 박스 */
-    .image-upload-box {
-      border: 2px dashed #CBD5E1;
-      border-radius: 8px;
-      padding: 20px;
-      text-align: center;
-      cursor: pointer;
-      background-color: #F8FAFC;
+    /* 이미지 선택 버튼 그룹 스타일 */
+    .image-btn-group {
+      display: flex;
+      gap: 10px;
     }
+    .image-btn-group button {
+      flex: 1;
+      padding: 14px 10px;
+      font-size: 14px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-camera { background-color: #2D3748; }
+    .btn-camera:hover { background-color: #1A202C; }
+    .btn-gallery { background-color: #4A5568; }
+    .btn-gallery:hover { background-color: #2D3748; }
 
     .image-preview {
       max-width: 100%;
@@ -244,13 +251,19 @@
 
         <div class="form-group" style="margin-top:15px;">
           <label>공부 인증 사진 (필수)</label>
-          <!-- 클릭 시 모바일에서 카메라/갤러리 선택 옵션창을 띄우는 업로드 영역 -->
-          <div class="image-upload-box" onclick="document.getElementById('image-input').click()">
-            📸 카메라 촬영 또는 갤러리 사진 선택
-            <!-- accept="image/*"만 남겨두어 OS 기본 선택창(카메라 vs 갤러리)이 뜨도록 설정 -->
-            <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
-            <img id="preview-img" class="image-preview" alt="미리보기">
+          
+          <!-- 명확하게 분리된 카메라 / 갤러리 선택 버튼 -->
+          <div class="image-btn-group">
+            <button type="button" class="btn-camera" onclick="document.getElementById('camera-input').click()">📸 카메라 촬영</button>
+            <button type="button" class="btn-gallery" onclick="document.getElementById('gallery-input').click()">🖼️ 갤러리 선택</button>
           </div>
+
+          <!-- 실제 작동하는 파일 인풋 (숨김 처리) -->
+          <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
+          <input type="file" id="gallery-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+
+          <!-- 미리보기 이미지 -->
+          <img id="preview-img" class="image-preview" alt="미리보기">
         </div>
 
         <div class="points-preview" style="margin-top:15px;">
@@ -297,7 +310,7 @@
     const db = firebase.database();
 
     const ADMIN_PASSWORD = "1029384756";
-    const MAX_FEED_COUNT = 10; // 원본 용량 관리를 위해 피드는 최신 10개만 유지 (오래된 순 자동 삭제)
+    const MAX_FEED_COUNT = 10; // 피드는 최신 10개만 유지 (오래된 순 자동 삭제)
 
     // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
@@ -381,7 +394,7 @@
       document.getElementById('expected-points').innerText = Math.floor(hours * 10);
     }
 
-    // 원본 이미지 그대로 읽어오기
+    // 원본 이미지 그대로 읽어오기 및 입력창 초기화
     function previewImage(event) {
       const file = event.target.files[0];
       if (file) {
@@ -448,7 +461,8 @@
       document.getElementById('study-memo').value = '';
       document.getElementById('expected-points').innerText = '0';
       document.getElementById('preview-img').style.display = 'none';
-      document.getElementById('image-input').value = '';
+      document.getElementById('camera-input').value = '';
+      document.getElementById('gallery-input').value = '';
       uploadedImageBase64 = null;
     }
 
