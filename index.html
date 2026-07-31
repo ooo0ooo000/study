@@ -409,6 +409,9 @@
         if (currentUser.id && data[currentUser.id]) {
           currentUser.points = data[currentUser.id].points || 0;
           currentUser.hours = data[currentUser.id].hours || 0;
+          if (data[currentUser.id].name) {
+            currentUser.name = data[currentUser.id].name;
+          }
         } else {
           currentUser.points = 0;
           currentUser.hours = 0;
@@ -418,7 +421,6 @@
 
       db.ref('feeds').on('value', (snapshot) => {
         const data = snapshot.val() || {};
-        // 키 값(feedId)을 포함시켜 리스트 구성 후 역순 정렬
         const feedList = Object.keys(data).map(key => ({
           feedId: key,
           ...data[key]
@@ -518,7 +520,6 @@
         img: uploadedImageBase64,
         time: new Date().toLocaleTimeString()
       }).then(() => {
-        // 31개 초과시 자동 삭제
         db.ref('feeds').once('value').then((snapshot) => {
           const feedsData = snapshot.val();
           if (feedsData) {
@@ -542,7 +543,6 @@
       uploadedImageBase64 = null;
     }
 
-    // 개별 피드 삭제 함수 (본인 전용 & 포인트 차감)
     function deleteFeed(feedId, studentId, hours, pointsEarned) {
       if (currentUser.id !== studentId) {
         alert('자신의 게시물만 삭제할 수 있습니다.');
@@ -550,7 +550,6 @@
       }
 
       if (confirm('이 인증 사진을 삭제하시겠습니까?\n 삭제 시 해당 인증으로 획득한 포인트와 공부 시간도 함께 차감됩니다.')) {
-        // 1. 해당 학생 데이터에서 포인트 및 시간 차감
         db.ref(`students/${studentId}`).once('value').then((snapshot) => {
           const studentData = snapshot.val();
           if (studentData) {
@@ -568,7 +567,6 @@
           }
         });
 
-        // 2. 피드 항목 삭제
         db.ref(`feeds/${feedId}`).remove().then(() => {
           alert('인증 사진이 삭제되었으며 포인트가 차감되었습니다.');
         });
@@ -597,12 +595,11 @@
         if (data[i]) {
           list.push({
             id: i,
-            name: data[i].name || `학생${i}`,
             points: parseInt(data[i].points) || 0,
             hours: parseFloat(data[i].hours) || 0
           });
         } else {
-          list.push({ id: i, name: `학생${i}`, points: 0, hours: 0 });
+          list.push({ id: i, points: 0, hours: 0 });
         }
       }
 
@@ -617,18 +614,20 @@
       const top2 = list[1];
       const top3 = list[2];
 
+      // 명예의 전당 (번호만 표시)
       document.getElementById('hall-of-fame').innerHTML = `
-        <div class="rank-podium">🥈 2등<br><small>${top2.id}번 ${top2.name}</small><br><strong>${top2.points}pt</strong></div>
-        <div class="rank-podium">👑 1등<br><small>${top1.id}번 ${top1.name}</small><br><strong>${top1.points}pt</strong></div>
-        <div class="rank-podium">🥉 3등<br><small>${top3.id}번 ${top3.name}</small><br><strong>${top3.points}pt</strong></div>
+        <div class="rank-podium">🥈 2등<br><strong>${top2.id}번</strong><br><small>${top2.points}pt</small></div>
+        <div class="rank-podium">👑 1등<br><strong>${top1.id}번</strong><br><small>${top1.points}pt</small></div>
+        <div class="rank-podium">🥉 3등<br><strong>${top3.id}번</strong><br><small>${top3.points}pt</small></div>
       `;
 
+      // 전체 랭킹 목록 (번호만 표시)
       const listContainer = document.getElementById('full-ranking-list');
       listContainer.innerHTML = '';
       list.forEach((st, idx) => {
         listContainer.innerHTML += `
           <div class="ranking-item">
-            <div><strong>${idx + 1}위</strong> - ${st.id}번 ${st.name}</div>
+            <div><strong>${idx + 1}위</strong> - ${st.id}번 학생</div>
             <div>${st.hours}시간 (${st.points}pt)</div>
           </div>
         `;
