@@ -61,6 +61,11 @@
     }
     button:hover { background-color: #357ABD; }
 
+    .btn-secondary {
+      background-color: #6C757D;
+    }
+    .btn-secondary:hover { background-color: #5A6268; }
+
     .btn-reset {
       background-color: #FF6B6B;
       color: white;
@@ -83,7 +88,7 @@
       gap: 8px;
     }
     label { font-size: 14px; font-weight: 600; }
-    select, input[type="text"], input[type="number"], textarea, input[type="file"] {
+    select, input[type="text"], input[type="number"], textarea {
       padding: 12px;
       border: 1px solid #DDD;
       border-radius: 8px;
@@ -113,6 +118,20 @@
       font-weight: bold;
     }
 
+    /* 커스텀 선택 버튼 스타일 */
+    .file-trigger-btn {
+      background-color: #28A745;
+      color: white;
+      padding: 14px;
+      font-size: 15px;
+      text-align: center;
+      border-radius: 8px;
+      width: 100%;
+    }
+    .file-trigger-btn:hover {
+      background-color: #218838;
+    }
+
     .image-preview {
       max-width: 100%;
       max-height: 250px;
@@ -129,6 +148,45 @@
       text-align: center;
       font-weight: bold;
       color: #856404;
+    }
+
+    /* 선택 팝업 (모달) 스타일 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: #FFFFFF;
+      padding: 24px;
+      border-radius: 16px;
+      width: 85%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-content h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .modal-option-btn {
+      padding: 14px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
     .hall-of-fame {
@@ -233,10 +291,13 @@
         </div>
 
         <div class="form-group" style="margin-top:15px;">
-          <label for="image-input">공부 인증 사진 (카메라/갤러리 선택)</label>
+          <label>공부 인증 사진</label>
           
-          <!-- capture 옵션 없이 accept="image/*"만 두어 스마트폰 OS 기본 선택창(카메라/갤러리)이 뜨도록 함 -->
-          <input type="file" id="image-input" accept="image/*" onchange="previewImage(event)">
+          <!-- 팝업 열기 버튼 -->
+          <button type="button" class="file-trigger-btn" onclick="openPhotoModal()">📸 사진 업로드 (카메라/갤러리 선택)</button>
+          
+          <!-- 숨김 처리된 실제 파일 input -->
+          <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
 
           <!-- 미리보기 이미지 -->
           <img id="preview-img" class="image-preview" alt="미리보기">
@@ -271,6 +332,16 @@
     </div>
   </div>
 
+  <!-- 카메라/갤러리 선택 팝업 모달 -->
+  <div id="photo-modal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>사진 업로드 방식 선택</h3>
+      <button type="button" class="modal-option-btn" onclick="selectUploadMode('camera')">📷 카메라로 직접 촬영</button>
+      <button type="button" class="modal-option-btn" onclick="selectUploadMode('gallery')">🖼️ 갤러리에서 사진 선택</button>
+      <button type="button" class="modal-option-btn btn-secondary" style="margin-top:8px;" onclick="closePhotoModal()">취소</button>
+    </div>
+  </div>
+
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyBoKFdMohkDXLa22OXnKOtWbOCYSNZv2S8",
@@ -298,6 +369,32 @@
 
     let currentUser = { id: null, name: '', points: 0, hours: 0 };
     let uploadedImageBase64 = null;
+
+    // --- 팝업 제어 및 카메라/갤러리 선택 관련 로직 ---
+    function openPhotoModal() {
+      document.getElementById('photo-modal').classList.add('active');
+    }
+
+    function closePhotoModal() {
+      document.getElementById('photo-modal').classList.remove('active');
+    }
+
+    function selectUploadMode(mode) {
+      const fileInput = document.getElementById('image-input');
+      closePhotoModal();
+
+      if (mode === 'camera') {
+        // 카메라 제약 추가 (후면 카메라 바로 촬영)
+        fileInput.setAttribute('capture', 'environment');
+      } else {
+        // 갤러리 선택 시 capture 속성 제거
+        fileInput.removeAttribute('capture');
+      }
+
+      // 실제 파일 선택창 트리거
+      fileInput.click();
+    }
+    // --------------------------------------------------
 
     // 실시간 DB 동기화
     function startRealtimeSync() {
