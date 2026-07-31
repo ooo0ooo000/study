@@ -291,6 +291,9 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // 관리자 비밀번호
+    const ADMIN_PASSWORD = "1029384756";
+
     // 학번 드롭다운 생성 (1~31번)
     const studentSelect = document.getElementById('student-id');
     for (let i = 1; i <= 31; i++) {
@@ -309,7 +312,6 @@
         const data = snapshot.val() || {};
         renderRanking(data);
         
-        // 현재 내 유저 데이터 업데이트
         if (currentUser.id && data[currentUser.id]) {
           currentUser.points = data[currentUser.id].points || 0;
           currentUser.hours = data[currentUser.id].hours || 0;
@@ -342,7 +344,6 @@
         if (data) {
           currentUser.points = data.points || 0;
           currentUser.hours = data.hours || 0;
-          // 이름 업데이트
           db.ref(`students/${id}`).update({ name: name });
         } else {
           db.ref(`students/${id}`).set({ id: id, name: name, points: 0, hours: 0 });
@@ -406,14 +407,12 @@
       if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
       if (!uploadedImageBase64) { alert('사진을 올려주세요!'); return; }
 
-      // 숫자 연산 오류 방지 (parseFloat)
       const currentPoints = parseInt(currentUser.points) || 0;
       const currentHours = parseFloat(currentUser.hours) || 0;
 
       const newPoints = currentPoints + Math.floor(hours * 10);
       const newHours = (currentHours + hours).toFixed(1);
 
-      // 데이터 저장
       db.ref(`students/${currentUser.id}`).set({
         id: currentUser.id,
         name: currentUser.name,
@@ -439,21 +438,29 @@
       uploadedImageBase64 = null;
     }
 
-    // 🔥 전체 데이터 (포인트,시간,사진) 완벽 초기화
+    // 🔒 비밀번호 잠금이 추가된 데이터 초기화 함수
     function resetAllData() {
-      if (confirm('모든 학생의 포인트, 시간, 사진 기록을 전부 삭제하고 0으로 초기화하시겠습니까?')) {
-        db.ref('students').remove();
-        db.ref('feeds').remove().then(() => {
-          alert('모든 데이터가 완벽하게 초기화되었습니다.');
-        });
+      const inputPassword = prompt("관리자 비밀번호를 입력하세요:");
+      
+      if (inputPassword === null) {
+        return; // 취소 버튼을 누른 경우
+      }
+
+      if (inputPassword === ADMIN_PASSWORD) {
+        if (confirm('정말로 모든 학생의 포인트, 시간, 사진 기록을 삭제하고 초기화하시겠습니까?')) {
+          db.ref('students').remove();
+          db.ref('feeds').remove().then(() => {
+            alert('모든 데이터가 성공적으로 초기화되었습니다.');
+          });
+        }
+      } else {
+        alert('비밀번호가 올바르지 않습니다!');
       }
     }
 
     // 랭킹 렌더링
     function renderRanking(data) {
       const list = [];
-      
-      // 1~31번 기본 틀 생성
       for (let i = 1; i <= 31; i++) {
         if (data[i]) {
           list.push({
@@ -467,7 +474,6 @@
         }
       }
 
-      // 포인트 기준 정렬 (동점이면 학번 순)
       list.sort((a, b) => {
         if (b.points === a.points) {
           return a.id - b.id;
