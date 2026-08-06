@@ -279,6 +279,637 @@
         <label for="nickname">닉네임</label>
         <input type="text" id="nickname" placeholder="닉네임을 입력하세요">
       </div>
+      <button type="button" id="login-btn">입장하기</button>
+    </div>
+
+    <!-- 메인 화면 -->
+    <div id="main-screen" class="screen">
+      <div class="nav-tabs">
+        <button type="button" id="tab-auth-btn" class="active" onclick="switchTab('auth')">공부 인증</button>
+        <button type="button" id="tab-rank-btn" onclick="switchTab('rank')">순위 보기</button>
+        <button type="button" id="tab-feed-btn" onclick="switchTab('feed')">인증 피드</button>
+      </div>
+
+      <div class="user-info-card">
+        <div><span id="user-display-id">0번</span> (<span id="user-display-name">사용자</span>)</div>
+        <div>보유 포인트: <span id="user-points" style="color:var(--primary-color);">0</span> pt</div>
+      </div>
+
+      <!-- 1. 공부 인증 탭 -->
+      <div id="tab-auth" class="tab-content">
+        <div class="form-group" style="margin-top:10px;">
+          <label for="study-hours">오늘 공부한 시간 (시간 단위)</label>
+          <input type="number" id="study-hours" min="0.5" step="0.5" placeholder="예: 2.5" oninput="calculatePoints()">
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+          <label for="study-memo">오늘 공부한 내용</label>
+          <textarea id="study-memo" rows="3" placeholder="예) 수학 문제집 5페이지 풀기"></textarea>
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+          <label>공부 인증 사진</label>
+          <button type="button" class="file-trigger-btn" onclick="openPhotoModal()">📸 사진 업로드 (카메라/갤러리 선택)</button>
+          <input type="file" id="image-input" accept="image/*" style="display:none;" onchange="previewImage(event)">
+          <img id="preview-img" class="image-preview" alt="미리보기">
+        </div>
+
+        <div class="points-preview" style="margin-top:15px;">
+          획득 예정 포인트: <span id="expected-points">0</span> pt
+        </div>
+
+        <button type="button" style="margin-top:15px; width:100%;" onclick="submitAuth(event)">공부 인증 등록하기</button>
+      </div>
+
+      <!-- 2. 순위 보기 탭 -->
+      <div id="tab-rank" class="tab-content" style="display:none;">
+        <div class="section-header">
+          <h3>🏆 명예의 전당</h3>
+          <button type="button" class="btn-reset" onclick="resetAllData()">전체 데이터 초기화</button>
+        </div>
+        <div class="hall-of-fame" id="hall-of-fame"></div>
+        <h3 style="margin:20px 0 10px 0;">📊 학급 전체 랭킹</h3>
+        <div class="ranking-list" id="full-ranking-list"></div>
+      </div>
+
+      <!-- 3. 인증 피드 탭 -->
+      <div id="tab-feed" class="tab-content" style="display:none;">
+        <div class="section-header">
+          <h3>📸 오늘의 인증 피드 (최신 31개)</h3>
+          <button type="button" class="btn-reset" onclick="resetAllData()">전체 데이터 초기화</button>
+        </div>
+        <div class="feed-list" id="feed-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 카메라/갤러리 선택 팝업 모달 -->
+  <div id="photo-modal" class="modal-overlay">
+    <div class="modal-content">
+      <h3>사진 업로드 방식 선택</h3>
+      <button type="button" class="modal-option-btn" onclick="selectUploadMode('camera')">📷 카메라로 직접 촬영</button>
+      <button type="button" class="modal-option-btn" onclick="selectUploadMode('gallery')">🖼️ 갤러리에서 사진 선택</button>
+      <button type="button" class="modal-option-btn btn-secondary" style="margin-top:8px;" onclick="closePhotoModal()">취소</button>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBoKFdMohkDXLa22OXnKOtWbOCYSNZv2S8",
+      authDomain: "study-85099.firebaseapp.com",
+      databaseURL: "https://study-85099-default-rtdb.firebaseio.com",
+      projectId: "study-85099",
+      storageBucket: "study-85099.firebasestorage.app",
+      messagingSenderId: "626605688574",
+      appId: "1:626605688574:web:18cec57f8fc64bba6fc7af"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const ADMIN_PASSWORD = "1029384756";
+    const MAX_FEED_COUNT = 31;
+
+    const studentSelect = document.getElementById('student-id');
+    for (let i = 1; i <= 31; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.innerText = `${i}번 학생`;
+      studentSelect.appendChild(opt);
+    }
+
+    let currentUser = { id: null, name: '', points: 0, hours: 0 };
+    let uploadedImageBase64 = null;
+
+    function openPhotoModal() {
+      document.getElementById('photo-modal').classList.add('active');
+    }
+
+    function closePhotoModal() {
+      document.getElementById('photo-modal').classList.remove('active');
+    }
+
+    function selectUploadMode(mode) {
+      const fileInput = document.getElementById('image-input');
+      closePhotoModal();
+
+      if (mode === 'camera') {
+        fileInput.setAttribute('capture', 'environment');
+      } else {
+        fileInput.removeAttribute('capture');
+      }
+      fileInput.click();
+    }
+
+    function startRealtimeSync() {
+      db.ref('students').on('value', (snapshot) => {
+        const data = snapshot.val() || {};
+        renderRanking(data);
+        
+        if (currentUser.id && data[currentUser.id]) {
+          currentUser.points = data[currentUser.id].points || 0;
+          currentUser.hours = data[currentUser.id].hours || 0;
+          if (data[currentUser.id].name) {
+            currentUser.name = data[currentUser.id].name;
+          }
+        } else {
+          currentUser.points = 0;
+          currentUser.hours = 0;
+        }
+        updateUserInfoUI();
+      });
+
+      db.ref('feeds').on('value', (snapshot) => {
+        const data = snapshot.val() || {};
+        const feedList = Object.keys(data).map(key => ({
+          feedId: key,
+          ...data[key]
+        })).reverse();
+        
+        renderFeed(feedList);
+      });
+    }
+
+    document.getElementById('login-btn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = parseInt(studentSelect.value);
+      const name = document.getElementById('nickname').value.trim();
+
+      if (!name) { alert('닉네임을 입력하세요!'); return; }
+
+      currentUser.id = id;
+      currentUser.name = name;
+
+      db.ref(`students/${id}`).once('value').then((snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          currentUser.points = data.points || 0;
+          currentUser.hours = data.hours || 0;
+          db.ref(`students/${id}`).update({ name: name });
+        } else {
+          db.ref(`students/${id}`).set({ id: id, name: name, points: 0, hours: 0 });
+        }
+        updateUserInfoUI();
+        startRealtimeSync();
+
+        document.getElementById('login-screen').classList.remove('active');
+        document.getElementById('main-screen').classList.add('active');
+      }).catch(err => {
+        alert("파이어베이스 연결을 확인해주세요.");
+      });
+    });
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.nav-tabs button').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).style.display = 'block';
+      document.getElementById(`tab-${tabName}-btn`).classList.add('active');
+    }
+
+    function updateUserInfoUI() {
+      document.getElementById('user-display-id').innerText = `${currentUser.id}번`;
+      document.getElementById('user-display-name').innerText = currentUser.name;
+      document.getElementById('user-points').innerText = currentUser.points;
+    }
+
+    function calculatePoints() {
+      const hours = parseFloat(document.getElementById('study-hours').value) || 0;
+      document.getElementById('expected-points').innerText = Math.floor(hours * 10);
+    }
+
+    function previewImage(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          uploadedImageBase64 = e.target.result;
+          document.getElementById('preview-img').src = uploadedImageBase64;
+          document.getElementById('preview-img').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function submitAuth(event) {
+      if (event) event.preventDefault();
+
+      const hours = parseFloat(document.getElementById('study-hours').value);
+      const memo = document.getElementById('study-memo').value.trim();
+
+      if (!hours || hours <= 0) { alert('공부 시간을 입력해 주세요!'); return; }
+      if (!uploadedImageBase64) { alert('사진을 등록해 주세요!'); return; }
+
+      const currentPoints = parseInt(currentUser.points) || 0;
+      const currentHours = parseFloat(currentUser.hours) || 0;
+
+      const earnedPoints = Math.floor(hours * 10);
+      const newPoints = currentPoints + earnedPoints;
+      const newHours = (currentHours + hours).toFixed(1);
+
+      db.ref(`students/${currentUser.id}`).set({
+        id: currentUser.id,
+        name: currentUser.name,
+        points: newPoints,
+        hours: parseFloat(newHours)
+      });
+
+      const newFeedRef = db.ref('feeds').push();
+      newFeedRef.set({
+        studentId: currentUser.id,
+        name: currentUser.name,
+        hours: hours,
+        pointsEarned: earnedPoints,
+        memo: memo || '오늘도 열공 완료!',
+        img: uploadedImageBase64,
+        time: new Date().toLocaleTimeString()
+      }).then(() => {
+        db.ref('feeds').once('value').then((snapshot) => {
+          const feedsData = snapshot.val();
+          if (feedsData) {
+            const keys = Object.keys(feedsData);
+            if (keys.length > MAX_FEED_COUNT) {
+              const deleteCount = keys.length - MAX_FEED_COUNT;
+              for (let i = 0; i < deleteCount; i++) {
+                db.ref(`feeds/${keys[i]}`).remove();
+              }
+            }
+          }
+        });
+      });
+
+      alert('인증이 완료되었습니다!');
+      document.getElementById('study-hours').value = '';
+      document.getElementById('study-memo').value = '';
+      document.getElementById('expected-points').innerText = '0';
+      document.getElementById('preview-img').style.display = 'none';
+      document.getElementById('image-input').value = '';
+      uploadedImageBase64 = null;
+    }
+
+    function deleteFeed(feedId, studentId, hours, pointsEarned) {
+      if (currentUser.id !== studentId) {
+        alert('자신의 게시물만 삭제할 수 있습니다.');
+        return;
+      }
+
+      if (confirm('이 인증 사진을 삭제하시겠습니까?\n 삭제 시 해당 인증으로 획득한 포인트와 공부 시간도 함께 차감됩니다.')) {
+        db.ref(`students/${studentId}`).once('value').then((snapshot) => {
+          const studentData = snapshot.val();
+          if (studentData) {
+            const deductPoints = pointsEarned || Math.floor(hours * 10);
+            const currentPoints = studentData.points || 0;
+            const currentHours = studentData.hours || 0;
+
+            const updatedPoints = Math.max(0, currentPoints - deductPoints);
+            const updatedHours = Math.max(0, (currentHours - hours)).toFixed(1);
+
+            db.ref(`students/${studentId}`).update({
+              points: updatedPoints,
+              hours: parseFloat(updatedHours)
+            });
+          }
+        });
+
+        db.ref(`feeds/${feedId}`).remove().then(() => {
+          alert('인증 사진이 삭제되었으며 포인트가 차감되었습니다.');
+        });
+      }
+    }
+
+    function resetAllData() {
+      const inputPassword = prompt("관리자 비밀번호를 입력하세요:");
+      if (inputPassword === null) return;
+
+      if (inputPassword === ADMIN_PASSWORD) {
+        if (confirm('모든 학생 데이터 및 피드를 초기화하시겠습니까?')) {
+          db.ref('students').remove();
+          db.ref('feeds').remove().then(() => {
+            alert('데이터가 성공적으로 초기화되었습니다.');
+          });
+        }
+      } else {
+        alert('비밀번호가 올바르지 않습니다!');
+      }
+    }
+
+    function renderRanking(data) {
+      const list = [];
+      for (let i = 1; i <= 31; i++) {
+        if (data[i]) {
+          list.push({
+            id: i,
+            points: parseInt(data[i].points) || 0,
+            hours: parseFloat(data[i].hours) || 0
+          });
+        } else {
+          list.push({ id: i, points: 0, hours: 0 });
+        }
+      }
+
+      list.sort((a, b) => {
+        if (b.points === a.points) {
+          return a.id - b.id;
+        }
+        return b.points - a.points;
+      });
+
+      const top1 = list[0];
+      const top2 = list[1];
+      const top3 = list[2];
+
+      // 명예의 전당 (번호만 표시)
+      document.getElementById('hall-of-fame').innerHTML = `
+        <div class="rank-podium">🥈 2등<br><strong>${top2.id}번</strong><br><small>${top2.points}pt</small></div>
+        <div class="rank-podium">👑 1등<br><strong>${top1.id}번</strong><br><small>${top1.points}pt</small></div>
+        <div class="rank-podium">🥉 3등<br><strong>${top3.id}번</strong><br><small>${top3.points}pt</small></div>
+      `;
+
+      // 전체 랭킹 목록 (번호만 표시)
+      const listContainer = document.getElementById('full-ranking-list');
+      listContainer.innerHTML = '';
+      list.forEach((st, idx) => {
+        listContainer.innerHTML += `
+          <div class="ranking-item">
+            <div><strong>${idx + 1}위</strong> - ${st.id}번 학생</div>
+            <div>${st.hours}시간 (${st.points}pt)</div>
+          </div>
+        `;
+      });
+    }
+
+    function renderFeed(feeds) {
+      const feedContainer = document.getElementById('feed-list');
+      feedContainer.innerHTML = '';
+      if (!feeds || feeds.length === 0) {
+        feedContainer.innerHTML = '<p style="text-align:center; color:#888; padding:20px 0;">등록된 인증 사진이 없습니다.</p>';
+        return;
+      }
+      feeds.forEach(item => {
+        const isMyFeed = (item.studentId === currentUser.id);
+        const deleteBtnHtml = isMyFeed 
+          ? `<button type="button" class="btn-delete-feed" onclick="deleteFeed('${item.feedId}', ${item.studentId}, ${item.hours}, ${item.pointsEarned || Math.floor(item.hours * 10)})">🗑️ 삭제</button>`
+          : '';
+
+        feedContainer.innerHTML += `
+          <div class="feed-card">
+            <div class="feed-header">
+              <span>${item.studentId}번 ${item.name} (${item.hours}시간 인증)</span>
+              ${deleteBtnHtml}
+            </div>
+            <img src="${item.img}" class="feed-img">
+            <div>${item.memo}</div>
+          </div>
+        `;
+      });
+    }
+  </script>
+</body>
+</html>
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .screen.active {
+      display: flex;
+    }
+
+    h1, h2, h3 { text-align: center; color: #1A252C; }
+
+    button {
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { background-color: #357ABD; }
+
+    .btn-secondary {
+      background-color: #6C757D;
+    }
+    .btn-secondary:hover { background-color: #5A6268; }
+
+    .btn-reset {
+      background-color: #FF6B6B;
+      color: white;
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-delete-feed {
+      background-color: #FF6B6B;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-delete-feed:hover {
+      background-color: #E04848;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    label { font-size: 14px; font-weight: 600; }
+    select, input[type="text"], input[type="number"], textarea {
+      padding: 12px;
+      border: 1px solid #DDD;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .nav-tabs { display: flex; gap: 8px; }
+    .nav-tabs button {
+      flex: 1;
+      background-color: #E9ECEF;
+      color: #495057;
+      padding: 10px 4px;
+      font-size: 13px;
+    }
+    .nav-tabs button.active {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .user-info-card {
+      background-color: #EBF3FA;
+      padding: 16px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    .file-trigger-btn {
+      background-color: #28A745;
+      color: white;
+      padding: 14px;
+      font-size: 15px;
+      text-align: center;
+      border-radius: 8px;
+      width: 100%;
+    }
+    .file-trigger-btn:hover {
+      background-color: #218838;
+    }
+
+    .image-preview {
+      max-width: 100%;
+      max-height: 250px;
+      margin-top: 10px;
+      border-radius: 8px;
+      display: none;
+      border: 1px solid #E2E8F0;
+    }
+
+    .points-preview {
+      background-color: #FFF9DB;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: bold;
+      color: #856404;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: #FFFFFF;
+      padding: 24px;
+      border-radius: 16px;
+      width: 85%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-content h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .modal-option-btn {
+      padding: 14px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .hall-of-fame {
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      background: linear-gradient(180deg, #FFF9C4 0%, #FFF 100%);
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #FFE082;
+    }
+    .rank-podium {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .ranking-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .ranking-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px;
+      background-color: #F8FAFC;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .feed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 450px;
+      overflow-y: auto;
+    }
+    .feed-card {
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+    .feed-img {
+      width: 100%;
+      border-radius: 8px;
+      object-fit: cover;
+      max-height: 350px;
+    }
+  </style>
+
+  <!-- 파이어베이스 SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+  <div class="container">
+    <!-- 로그인 화면 -->
+    <div id="login-screen" class="screen active">
+      <h1>📚 공부시간 인증</h1>
+      <div class="form-group">
+        <label for="student-id">학번 선택 (1번~31번)</label>
+        <select id="student-id"></select>
+      </div>
+      <div class="form-group">
+        <label for="nickname">닉네임</label>
+        <input type="text" id="nickname" placeholder="닉네임을 입력하세요">
+      </div>
       <button id="login-btn">입장하기</button>
     </div>
 
